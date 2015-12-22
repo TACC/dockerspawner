@@ -183,7 +183,7 @@ class DockerSpawner(Spawner):
             for key, value in self.read_only_volumes.items()
         }
         volumes.update(ro_volumes)
-        volumes['/tokens/{}'.format('wmoreira')] = { 'bind': '/token', 'ro': True}
+        volumes['/tokens/{}'.format(self.escaped_name)] = { 'bind': '/token', 'ro': True}
         return volumes
 
     _escaped_name = None
