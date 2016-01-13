@@ -182,8 +182,9 @@ class DockerSpawner(Spawner):
             key: {'bind': value, 'ro': True}
             for key, value in self.read_only_volumes.items()
         }
+        tenant_id = os.environ.get('AGAVE_TENANT_ID')
         volumes.update(ro_volumes)
-        volumes['/tokens/{}'.format(self.escaped_name)] = { 'bind': '/token', 'ro': True}
+        volumes['/tokens/{}/{}/.agpy'.format(tenant_id, self.escaped_name)] = { 'bind': '/etc/.agpy', 'ro': True}
         return volumes
 
     _escaped_name = None
