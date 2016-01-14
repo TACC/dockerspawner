@@ -159,7 +159,7 @@ class DockerSpawner(Spawner):
             itertools.chain(
                 self.volumes.values(),
                 self.read_only_volumes.values(),
-                ['/token']
+                ['/etc/.agpy']
             )
         )
 
