@@ -159,7 +159,7 @@ class DockerSpawner(Spawner):
             itertools.chain(
                 self.volumes.values(),
                 self.read_only_volumes.values(),
-                ['/etc/.agpy']
+                ['/etc/.agpy', '/home/jupyter/.agave/current']
             )
         )
 
@@ -185,6 +185,7 @@ class DockerSpawner(Spawner):
         tenant_id = os.environ.get('AGAVE_TENANT_ID')
         volumes.update(ro_volumes)
         volumes['/tokens/{}/{}/.agpy'.format(tenant_id, self.escaped_name)] = { 'bind': '/etc/.agpy', 'ro': True}
+        volumes['/tokens/{}/{}/current'.format(tenant_id, self.escaped_name)] = { 'bind': '/home/jupyter/.agave/current', 'ro': True}
         return volumes
 
     _escaped_name = None
