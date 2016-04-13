@@ -155,11 +155,13 @@ class DockerSpawner(Spawner):
         Returns a list of all the values in self.volumes or
         self.read_only_volumes.
         """
+        host_paths, _, _ = self.get_custom_mounts()
         return list(
             itertools.chain(
                 self.volumes.values(),
                 self.read_only_volumes.values(),
-                ['/etc/.agpy', '/home/jupyter/.agave/current']
+                ['/etc/.agpy', '/home/jupyter/.agave/current'],
+                host_paths,
             )
         )
 
@@ -186,6 +188,9 @@ class DockerSpawner(Spawner):
         volumes.update(ro_volumes)
         volumes['/tokens/{}/{}/.agpy'.format(tenant_id, self.escaped_name)] = { 'bind': '/etc/.agpy', 'ro': True}
         volumes['/tokens/{}/{}/current'.format(tenant_id, self.escaped_name)] = { 'bind': '/home/jupyter/.agave/current', 'ro': True}
+        host_paths, container_paths, types = self.get_custom_mounts()
+        for i in range(len(host_paths)):
+            volumes[host_paths[i]] = {'bind': container_paths[i], 'ro': types[i]=='ro'}
         return volumes
 
     _escaped_name = None
@@ -201,6 +206,24 @@ class DockerSpawner(Spawner):
     @property
     def container_name(self):
         return "{}-{}".format(self.container_prefix, self.escaped_name)
+
+    def get_custom_mounts(self):
+        """
+        Return a list of custom mounts read from the file /volume_mounts.
+        Returns three lists: host_paths, container_paths, types
+        where each element of types is either 'ro' or 'rw'
+        """
+        host_paths = []
+        container_paths = []
+        types = []
+        with open('/volume_mounts', 'r') as f:
+            host_path, container_path, typ = f.readline().split(':')
+            host_path = host_path.replace('{username}', self.escaped_name),
+            container_path = container_path.replace('{username}', self.escaped_name)
+            host_paths.append(host_path)
+            container_paths.append(container_path)
+            types.append(typ)
+        return host_paths, container_paths, types
 
     def load_state(self, state):
         super(DockerSpawner, self).load_state(state)
