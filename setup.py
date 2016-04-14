@@ -32,7 +32,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Get the current package version.
 version_ns = {}
-with open(pjoin(here, 'version.py')) as f:
+with open(pjoin(here, 'dockerspawner', '_version.py')) as f:
     exec(f.read(), {}, version_ns)
 
 
@@ -41,10 +41,10 @@ setup_args = dict(
     packages            = ['dockerspawner'],
     version             = version_ns['__version__'],
     description         = """Dockerspawner: A custom spawner for Jupyterhub.""",
-    long_description    = "",
+    long_description    = "Spawn single-user servers with Docker.",
     author              = "Jupyter Development Team",
-    author_email        = "ipython-dev@scipy.org",
-    url                 = "http://jupyter.org",
+    author_email        = "jupyter@googlegroups.com",
+    url                 = "https://jupyter.org",
     license             = "BSD",
     platforms           = "Linux, Mac OS X",
     keywords            = ['Interactive', 'Interpreter', 'Shell', 'Web'],
@@ -57,6 +57,9 @@ setup_args = dict(
         'Programming Language :: Python :: 3',
     ],
 )
+
+if 'bdist_wheel' in sys.argv:
+    import setuptools
 
 # setuptools requirements
 if 'setuptools' in sys.modules:

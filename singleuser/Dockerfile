@@ -1,28 +1,19 @@
 # Build as jupyter/jupyterhub-singleuser
 # Run with the DockerSpawner in JupyterHub
 
-FROM ipython/scipystack
+FROM jupyter/scipy-notebook
 
-MAINTAINER IPython Project <ipython-dev@scipy.org>
-
-# fetch juptyerhub-singleuser entrypoint
-ADD https://raw.githubusercontent.com/jupyter/jupyterhub/master/jupyterhub/singleuser.py /usr/local/bin/jupyterhub-singleuser
-RUN chmod 755 /usr/local/bin/jupyterhub-singleuser
-
-# jupyter is our user
-RUN useradd -m -s /bin/bash jupyter
-
-USER jupyter
-ENV HOME /home/jupyter
-ENV SHELL /bin/bash
-ENV USER jupyter
-
-WORKDIR /home/jupyter/
-
-# IPython introductions
-RUN cp -r /srv/ipython/examples /home/jupyter/examples
+MAINTAINER Project Jupyter <jupyter@googlegroups.com>
 
 EXPOSE 8888
 
+USER root
+# fetch juptyerhub-singleuser entrypoint
+RUN wget -q https://raw.githubusercontent.com/jupyter/jupyterhub/master/scripts/jupyterhub-singleuser -O /usr/local/bin/jupyterhub-singleuser && \
+    chmod 755 /usr/local/bin/jupyterhub-singleuser
+
 ADD singleuser.sh /srv/singleuser/singleuser.sh
+USER jovyan
+# smoke test that it's importable at least
+RUN sh /srv/singleuser/singleuser.sh -h
 CMD ["sh", "/srv/singleuser/singleuser.sh"]

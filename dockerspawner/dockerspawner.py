@@ -19,7 +19,6 @@ from traitlets import (
     Dict,
     Unicode,
     Bool,
-    Enum,
 )
 
 
@@ -32,7 +31,7 @@ class UnicodeOrFalse(Unicode):
 
 
 class DockerSpawner(Spawner):
-    
+
     _executor = None
     @property
     def executor(self):
@@ -41,7 +40,7 @@ class DockerSpawner(Spawner):
         if cls._executor is None:
             cls._executor = ThreadPoolExecutor(1)
         return cls._executor
-    
+
     _client = None
     @property
     def client(self):
@@ -90,15 +89,20 @@ class DockerSpawner(Spawner):
             """
             Map from host file/directory to container file/directory.
             Volumes specified here will be read/write in the container.
+            If you use {username} in the host file / directory path, it will be
+            replaced with the current user's name.
             """
         )
     )
+
     read_only_volumes = Dict(
         config=True,
         help=dedent(
             """
             Map from host file/directory to container file/directory.
             Volumes specified here will be read-only in the container.
+            If you use {username} in the host file / directory path, it will be
+            replaced with the current user's name.
             """
         )
     )
@@ -118,7 +122,7 @@ class DockerSpawner(Spawner):
     extra_create_kwargs = Dict(config=True, help="Additional args to pass for container create")
     extra_start_kwargs = Dict(config=True, help="Additional args to pass for container start")
     extra_host_config = Dict(config=True, help="Additional args to create_host_config for container create")
-    
+
     _container_safe_chars = set(string.ascii_letters + string.digits + '-')
     _container_escape_char = '_'
 
@@ -131,6 +135,44 @@ class DockerSpawner(Spawner):
             the specified IP to connect the hub api.  This is useful
             when the hub_api is bound to listen on all ports or is
             running inside of a container.
+            """
+        )
+    )
+
+    use_internal_ip = Bool(
+        False,
+        config=True,
+        help=dedent(
+            """
+            Enable the usage of the internal docker ip. This is useful if you are running
+            jupyterhub (as a container) and the user containers within the same docker engine.
+            E.g. by mounting the docker socket of the host into the jupyterhub container.
+            """
+        )
+    )
+
+    links = Dict(
+        config=True,
+        help=dedent(
+            """
+            Specify docker link mapping to add to the container, e.g.
+
+                links = {'jupyterhub: 'jupyterhub'}
+
+            If the Hub is running in a Docker container,
+            this can simplify routing because all traffic will be using docker hostnames.
+            """
+        )
+    )
+
+    network_name = Unicode(
+        "bridge",
+        config=True,
+        help=dedent(
+            """
+            The name of the docker network from which to retrieve the internal IP address. Defaults to the default
+            docker network 'bridge'. You need to set this if you run your jupyterhub containers in a
+            non-standard network. Only has an effect if use_internal_ip=True.
             """
         )
     )
@@ -177,11 +219,11 @@ class DockerSpawner(Spawner):
         }
         """
         volumes = {
-            key: {'bind': value, 'ro': False}
+            key.format(username=self.user.name): {'bind': value.format(username=self.user.name), 'ro': False}
             for key, value in self.volumes.items()
         }
         ro_volumes = {
-            key: {'bind': value, 'ro': True}
+            key.format(username=self.user.name): {'bind': value.format(username=self.user.name), 'ro': True}
             for key, value in self.read_only_volumes.items()
         }
         tenant_id = os.environ.get('AGAVE_TENANT_ID')
@@ -228,7 +270,7 @@ class DockerSpawner(Spawner):
     def load_state(self, state):
         super(DockerSpawner, self).load_state(state)
         self.container_id = state.get('container_id', '')
-    
+
     def get_state(self):
         state = super(DockerSpawner, self).get_state()
         if self.container_id:
@@ -247,15 +289,18 @@ class DockerSpawner(Spawner):
     def _env_keep_default(self):
         """Don't inherit any env from the parent process"""
         return []
-    
-    def _env_default(self):
-        env = super(DockerSpawner, self)._env_default()
+
+    def get_env(self):
+        env = super(DockerSpawner, self).get_env()
         env.update(dict(
             JPY_USER=self.user.name,
             JPY_COOKIE_NAME=self.user.server.cookie_name,
             JPY_BASE_URL=self.user.server.base_url,
             JPY_HUB_PREFIX=self.hub.server.base_url
         ))
+
+        if self.notebook_dir:
+            env['NOTEBOOK_DIR'] = self.notebook_dir
 
         if self.hub_ip_connect:
            hub_api_url = self._public_hub_api_url()
@@ -267,19 +312,19 @@ class DockerSpawner(Spawner):
 
     def _docker(self, method, *args, **kwargs):
         """wrapper for calling docker methods
-        
+
         to be passed to ThreadPoolExecutor
         """
         m = getattr(self.client, method)
         return m(*args, **kwargs)
-    
+
     def docker(self, method, *args, **kwargs):
         """Call a docker method in a background thread
-        
+
         returns a Future
         """
         return self.executor.submit(self._docker, method, *args, **kwargs)
-    
+
     @gen.coroutine
     def poll(self):
         """Check for my id in `docker ps`"""
@@ -318,6 +363,11 @@ class DockerSpawner(Spawner):
                 container = None
                 # my container is gone, forget my id
                 self.container_id = ''
+            elif e.response.status_code == 500:
+                self.log.info("Container '%s' is on unhealthy node", self.container_name)
+                container = None
+                # my container is unhealthy, forget my id
+                self.container_id = ''
             else:
                 raise
         return container
@@ -343,7 +393,7 @@ class DockerSpawner(Spawner):
             # build the dictionary of keyword arguments for create_container
             create_kwargs = dict(
                 image=image,
-                environment=self.env,
+                environment=self.get_env(),
                 volumes=self.volume_mount_points,
                 name=self.container_name)
             create_kwargs.update(self.extra_create_kwargs)
@@ -351,12 +401,17 @@ class DockerSpawner(Spawner):
                 create_kwargs.update(extra_create_kwargs)
 
             # build the dictionary of keyword arguments for host_config
-            host_config = dict(
-                binds=self.volume_binds,
-                port_bindings={8888: (self.container_ip,)})
+            host_config = dict(binds=self.volume_binds, links=self.links)
+
+            if not self.use_internal_ip:
+                host_config['port_bindings'] = {8888: (self.container_ip,)}
+
             host_config.update(self.extra_host_config)
+
             if extra_host_config:
                 host_config.update(extra_host_config)
+
+            self.log.debug("Starting host with config: %s", host_config)
 
             host_config = self.client.create_host_config(**host_config)
             create_kwargs.setdefault('host_config', {}).update(host_config)
@@ -387,10 +442,39 @@ class DockerSpawner(Spawner):
         # start the container
         yield self.docker('start', self.container_id, **start_kwargs)
 
-        # get the public-facing ip, port
-        resp = yield self.docker('port', self.container_id, 8888)
-        self.user.server.ip = self.container_ip
-        self.user.server.port = resp[0]['HostPort']
+        ip, port = yield from self.get_ip_and_port()
+        self.user.server.ip = ip
+        self.user.server.port = port
+
+    def get_ip_and_port(self):
+        if self.use_internal_ip:
+            resp = yield self.docker('inspect_container', self.container_id)
+            network_settings = resp['NetworkSettings']
+            if 'Networks' in network_settings:
+                ip = self.get_network_ip(network_settings)
+            else:  # Fallback for old versions of docker (<1.9) without network management
+                ip = network_settings['IPAddress']
+            port = 8888
+        else:
+            resp = yield self.docker('port', self.container_id, 8888)
+            if resp is None:
+                raise RuntimeError("Failed to get port info for %s" % self.container_id)
+            ip = resp[0]['HostIp']
+            port = resp[0]['HostPort']
+        return ip, port
+
+    def get_network_ip(self, network_settings):
+        networks = network_settings['Networks']
+        if self.network_name not in networks:
+            raise Exception(
+                "Unknown docker network '{network}'. Did you create it with 'docker network create <name>' and "
+                "did you pass network_mode=<name> in extra_kwargs?".format(
+                    network=self.network_name
+                )
+            )
+        network = networks[self.network_name]
+        ip = network['IPAddress']
+        return ip
 
     @gen.coroutine
     def stop(self, now=False):
