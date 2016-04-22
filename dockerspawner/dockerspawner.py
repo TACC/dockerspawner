@@ -259,12 +259,15 @@ class DockerSpawner(Spawner):
         container_paths = []
         types = []
         with open('/volume_mounts', 'r') as f:
-            host_path, container_path, typ = f.readline().split(':')
-            host_path = host_path.replace('{username}', self.escaped_name),
-            container_path = container_path.replace('{username}', self.escaped_name)
-            host_paths.append(host_path)
-            container_paths.append(container_path)
-            types.append(typ)
+            for line in f.readlines():
+                if not ':' in line:
+                    break
+                host_path, container_path, typ = line.split(':')
+                host_path = host_path.replace('{username}', self.escaped_name),
+                container_path = container_path.replace('{username}', self.escaped_name)
+                host_paths.append(host_path)
+                container_paths.append(container_path)
+                types.append(typ)
         return host_paths, container_paths, types
 
     def load_state(self, state):
