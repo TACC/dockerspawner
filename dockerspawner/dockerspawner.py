@@ -263,7 +263,7 @@ class DockerSpawner(Spawner):
                 if not ':' in line:
                     break
                 host_path, container_path, typ = line.split(':')
-                host_path = host_path.replace('{username}', self.escaped_name),
+                host_path = host_path.replace('{username}', self.escaped_name)
                 container_path = container_path.replace('{username}', self.escaped_name)
                 host_paths.append(host_path)
                 container_paths.append(container_path)
