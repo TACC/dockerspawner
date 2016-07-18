@@ -228,8 +228,8 @@ class DockerSpawner(Spawner):
         }
         tenant_id = os.environ.get('AGAVE_TENANT_ID')
         volumes.update(ro_volumes)
-        volumes['/tokens/{}/{}/.agpy'.format(tenant_id, self.escaped_name)] = { 'bind': '/etc/.agpy', 'ro': True}
-        volumes['/tokens/{}/{}/current'.format(tenant_id, self.escaped_name)] = { 'bind': '/home/jupyter/.agave/current', 'ro': True}
+        volumes['/tokens/{}/{}/.agpy'.format(tenant_id, self.escaped_name)] = { 'bind': '/etc/.agpy', 'ro': False}
+        volumes['/tokens/{}/{}/current'.format(tenant_id, self.escaped_name)] = { 'bind': '/home/jupyter/.agave/current', 'ro': False}
         host_paths, container_paths, types = self.get_custom_mounts()
         for i in range(len(host_paths)):
             volumes[host_paths[i]] = {'bind': container_paths[i], 'ro': types[i]=='ro'}
