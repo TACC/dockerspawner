@@ -258,13 +258,16 @@ class DockerSpawner(Spawner):
         host_paths = []
         container_paths = []
         types = []
+        tenant_id = os.environ.get('AGAVE_TENANT_ID')
         with open('/volume_mounts', 'r') as f:
             for line in f.readlines():
                 if not ':' in line:
                     break
                 host_path, container_path, typ = line.split(':')
                 host_path = host_path.replace('{username}', self.escaped_name)
+                host_path = host_path.replace('{tenant_id}', tenant_id)
                 container_path = container_path.replace('{username}', self.escaped_name)
+                container_path = container_path.replace('{tenant_id}', tenant_id)
                 host_paths.append(host_path)
                 container_paths.append(container_path)
                 types.append(typ)
